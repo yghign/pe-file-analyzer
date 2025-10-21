@@ -43,3 +43,6 @@ def simple_pe_analysis():
         print(f"分析失败: {e}")
 
 
+# 使用
+if __name__ == "__main__":
+    simple_pe_analysis()
