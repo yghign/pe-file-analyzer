@@ -375,3 +375,5 @@ def test_pe_parser():
         return None
 
 
+if __name__ == "__main__":
+    test_pe_parser()
