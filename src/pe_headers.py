@@ -11,7 +11,7 @@ class PEParser:
         self.file_path = file_path
         self.file_data = None
         self.dos_header = {}
-        self.file_header = {}.
+        self.file_header = {}
 
         self.optional_header = {}
         self.sections = []
