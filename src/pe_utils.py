@@ -36,6 +36,3 @@ def simple_string_extract():
         print(f"错误: {e}")
 
 
-# 使用
-if __name__ == "__main__":
-    simple_string_extract()
