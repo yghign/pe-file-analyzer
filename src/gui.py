@@ -211,5 +211,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     root = tk.Tk()
-    app = PEAnalyzerGUI(root)  # 修正这里
+    app = PEAnalyzerGUI(root)
     root.mainloop()
