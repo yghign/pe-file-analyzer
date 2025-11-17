@@ -1,38 +1,23 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+import pefile
 import os
-import sys
-
-# 添加src目录到Python路径
-sys.path.append(os.path.dirname(__file__))
-
-# 导入各组员的模块
-try:
-    from pe_headers import analyze_headers
-    from pe_sections import analyze_sections
-    from pe_imports import analyze_imports
-    from pe_utils import calculate_hashes, extract_strings
-    import pefile
-except ImportError as e:
-    print(f"导入模块失败: {e}")
-    print("请确保所有依赖库已安装: pip install pefile")
-    sys.exit(1)
+import string
 
 
 class PEAnalyzerGUI:
     def __init__(self, root):
-        # 初始化主窗口
         self.root = root
-        self.root.title("简易PE文件分析器 - 团队项目")
-        self.root.geometry("1000x700")
+        self.root.title("简易PE文件分析器")
+        self.root.geometry("900x600")
         self.root.resizable(True, True)
-
-        # 存储PE文件对象和路径
         self.pe = None
         self.pe_path = ""
+        self.setup_ui()
 
-        # 1. 顶部选择区域
-        self.top_frame = tk.Frame(root, padx=10, pady=10)
+    def setup_ui(self):
+        # 顶部选择区域
+        self.top_frame = tk.Frame(self.root, padx=10, pady=10)
         self.top_frame.pack(fill=tk.X)
 
         self.select_btn = tk.Button(
@@ -56,53 +41,47 @@ class PEAnalyzerGUI:
         self.file_label = tk.Label(self.top_frame, text="未选择文件", font=("Arial", 10))
         self.file_label.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=10)
 
-        # 2. 中间标签页区域
-        self.tab_control = ttk.Notebook(root)
+        # 中间标签页区域
+        self.tab_control = ttk.Notebook(self.root)
         self.tab_control.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        # 创建各个标签页
-        self.create_tabs()
+        # 标签页1：DOS头信息
+        self.dos_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.dos_tab, text="DOS头信息")
+        self.dos_text = tk.Text(self.dos_tab, wrap=tk.WORD, font=("Consolas", 10))
+        self.dos_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-    def create_tabs(self):
-        """创建所有标签页"""
-        # 基础信息标签页（冯亮媚）
+        # 标签页2：基础信息
         self.basic_tab = ttk.Frame(self.tab_control)
         self.tab_control.add(self.basic_tab, text="基础信息")
-        self.basic_text = self.create_text_widget(self.basic_tab)
+        self.basic_text = tk.Text(self.basic_tab, wrap=tk.WORD, font=("Consolas", 10))
+        self.basic_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # 节表分析标签页（你）
+        # 标签页3：节表信息
         self.section_tab = ttk.Frame(self.tab_control)
-        self.tab_control.add(self.section_tab, text="节表分析")
-        self.section_text = self.create_text_widget(self.section_tab)
+        self.tab_control.add(self.section_tab, text="节表信息")
+        self.section_text = tk.Text(self.section_tab, wrap=tk.WORD, font=("Consolas", 10))
+        self.section_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # 导入表分析标签页（Eee）
+        # 标签页4：导入表信息
         self.import_tab = ttk.Frame(self.tab_control)
-        self.tab_control.add(self.import_tab, text="导入表分析")
-        self.import_text = self.create_text_widget(self.import_tab)
+        self.tab_control.add(self.import_tab, text="导入表信息")
+        self.import_text = tk.Text(self.import_tab, wrap=tk.WORD, font=("Consolas", 10))
+        self.import_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # 字符串提取标签页（Eee）
-        self.strings_tab = ttk.Frame(self.tab_control)
-        self.tab_control.add(self.strings_tab, text="字符串提取")
-        self.strings_text = self.create_text_widget(self.strings_tab)
+        # 标签页5：字符串提取
+        self.string_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.string_tab, text="字符串提取")
+        self.string_text = tk.Text(self.string_tab, wrap=tk.WORD, font=("Consolas", 10))
+        self.string_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # 文件哈希标签页（Eee）
-        self.hashes_tab = ttk.Frame(self.tab_control)
-        self.tab_control.add(self.hashes_tab, text="文件哈希")
-        self.hashes_text = self.create_text_widget(self.hashes_tab)
-
-    def create_text_widget(self, parent):
-        """创建带滚动条的文本框"""
-        text_widget = tk.Text(parent, wrap=tk.WORD, font=("Consolas", 10))
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=text_widget.yview)
-        text_widget.configure(yscrollcommand=scrollbar.set)
-
-        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        return text_widget
+    def clear_result(self):
+        for text_box in [self.dos_text, self.basic_text, self.section_text, self.import_text, self.string_text]:
+            text_box.config(state=tk.NORMAL)
+            text_box.delete(1.0, tk.END)
+            text_box.config(state=tk.DISABLED)
 
     def select_pe_file(self):
-        """选择PE文件"""
         self.pe_path = filedialog.askopenfilename(
             title="选择PE文件",
             filetypes=[("PE文件", "*.exe;*.dll;*.sys"), ("所有文件", "*.*")]
@@ -113,169 +92,198 @@ class PEAnalyzerGUI:
             self.clear_result()
 
     def analyze_pe(self):
-        """分析PE文件 - 集成各个模块"""
         try:
-            # 加载PE文件
             self.pe = pefile.PE(self.pe_path)
-
-            # 使用各个模块进行分析
-            self.display_basic_info()  # 冯亮媚的模块
-            self.display_section_info()  # 你的模块
-            self.display_import_info()  # Eee的模块
-            self.display_strings_info()  # Eee的模块
-            self.display_hashes_info()  # Eee的模块
-
-            messagebox.showinfo("分析完成", "PE文件分析成功！所有模块集成完成。")
-
+            self.parse_dos_header()
+            self.parse_basic_info()
+            self.parse_section_info()
+            self.parse_import_info()
+            self.extract_strings()
+            messagebox.showinfo("分析完成", "PE文件分析成功！")
         except Exception as e:
             messagebox.showerror("分析失败", f"错误信息：{str(e)}")
             self.clear_result()
 
-    def display_basic_info(self):
-        """显示基础信息 - 使用冯亮媚的模块"""
-        self.clear_text_widget(self.basic_text)
+    def parse_dos_header(self):
+        info = []
+        info.append("=" * 60)
+        info.append("                  PE文件DOS头（IMAGE_DOS_HEADER）详细信息")
+        info.append("=" * 60)
+        dos_header = self.pe.DOS_HEADER
+        info.append(f"1. 魔数（e_magic）: 0x{dos_header.e_magic:04X}")
+        info.append(f"   - 含义: {'有效DOS头' if dos_header.e_magic == 0x5A4D else '无效DOS头'}（0x5A4D对应ASCII 'MZ'）")
+        info.append(f"2. 最后一页字节数（e_cblp）: {dos_header.e_cblp}")
+        info.append(f"3. 文件总页数（e_cp）: {dos_header.e_cp}")
+        info.append(f"4. 重定位项数（e_crlc）: {dos_header.e_crlc}")
+        info.append(f"5. 头部大小（e_cparhdr）: {dos_header.e_cparhdr} 个段落（1段落=16字节）")
+        info.append(f"6. 最小附加段（e_minalloc）: {dos_header.e_minalloc}")
+        info.append(f"7. 最大附加段（e_maxalloc）: {dos_header.e_maxalloc}")
+        info.append(f"8. 初始SS值（e_ss）: 0x{dos_header.e_ss:04X}（DOS时代栈段寄存器）")
+        info.append(f"9. 初始SP值（e_sp）: 0x{dos_header.e_sp:04X}（DOS时代栈指针）")
+        info.append(f"10. 校验和（e_csum）: 0x{dos_header.e_csum:04X}")
+        info.append(f"11. 初始IP值（e_ip）: 0x{dos_header.e_ip:04X}（DOS时代指令指针）")
+        info.append(f"12. 初始CS值（e_cs）: 0x{dos_header.e_cs:04X}（DOS时代代码段寄存器）")
+        info.append(f"13. 重定位表偏移（e_lfarlc）: 0x{dos_header.e_lfarlc:04X}")
+        info.append(f"14. overlay编号（e_ovno）: {dos_header.e_ovno}")
+        info.append(f"15. PE头偏移（e_lfanew）: 0x{dos_header.e_lfanew:08X}")
+        info.append(f"    - 作用: 指向NT头起始位置，是PE文件结构的关键跳转点")
+
+        self.dos_text.config(state=tk.NORMAL)
+        self.dos_text.delete(1.0, tk.END)
+        self.dos_text.insert(tk.END, "\n".join(info) + "\n")
+        self.dos_text.config(state=tk.DISABLED)
+
+    def parse_basic_info(self):
+        info = []
+        info.append("=" * 50)
+        info.append("                PE文件基础信息（属性分析）")
+        info.append("=" * 50)
+
+        file_size = os.path.getsize(self.pe_path)
+        info.append(f"1. 文件属性:")
+        info.append(f"   - 文件路径: {self.pe_path}")
+        info.append(f"   - 文件大小: {file_size} 字节 ({file_size / 1024:.2f} KB)")
+        is_executable = (self.pe.FILE_HEADER.Characteristics & 0x0002) != 0
+        info.append(f"   - 是否可执行: {'是' if is_executable else '否'}")
+        is_dll = (self.pe.FILE_HEADER.Characteristics & 0x2000) != 0
+        info.append(f"   - 是否为DLL: {'是' if is_dll else '否'}")
+
+        info.append(f"\n2. NT头信息:")
+        info.append(f"   - 签名(Signature): 0x{self.pe.NT_HEADERS.Signature:08X}（0x4550对应ASCII 'PE'）")
+
+        info.append(f"\n3. 文件头(FileHeader)信息:")
+        info.append(
+            f"   - 机器类型: 0x{self.pe.FILE_HEADER.Machine:04X} ({self.get_machine_type(self.pe.FILE_HEADER.Machine)})")
+        info.append(f"   - 节表数量: {self.pe.FILE_HEADER.NumberOfSections}")
+        info.append(f"   - 创建时间戳: {self.pe.FILE_HEADER.TimeDateStamp}")
+        info.append(f"   - 特征值: 0x{self.pe.FILE_HEADER.Characteristics:04X}")
+
+        info.append(f"\n4. 可选头(OptionalHeader)信息:")
+        info.append(
+            f"   - 魔术字: 0x{self.pe.OPTIONAL_HEADER.Magic:04X} ({'32位' if self.pe.OPTIONAL_HEADER.Magic == 0x10B else '64位'})")
+        info.append(f"   - 入口点地址: 0x{self.pe.OPTIONAL_HEADER.AddressOfEntryPoint:08X}")
+        info.append(f"   - 代码段起始RVA: 0x{self.pe.OPTIONAL_HEADER.BaseOfCode:08X}")
+        if hasattr(self.pe.OPTIONAL_HEADER, 'BaseOfData'):
+            info.append(f"   - 数据段起始RVA: 0x{self.pe.OPTIONAL_HEADER.BaseOfData:08X}")
+        info.append(f"   - 镜像基址: 0x{self.pe.OPTIONAL_HEADER.ImageBase:08X}")
+        info.append(f"   - 节对齐: 0x{self.pe.OPTIONAL_HEADER.SectionAlignment:08X}")
+        info.append(f"   - 文件对齐: 0x{self.pe.OPTIONAL_HEADER.FileAlignment:08X}")
+        info.append(f"   - 镜像大小: {self.pe.OPTIONAL_HEADER.SizeOfImage} 字节")
+        info.append(f"   - 头部大小: {self.pe.OPTIONAL_HEADER.SizeOfHeaders} 字节")
+
+        self.basic_text.config(state=tk.NORMAL)
+        self.basic_text.delete(1.0, tk.END)
+        self.basic_text.insert(tk.END, "\n".join(info) + "\n")
+        self.basic_text.config(state=tk.DISABLED)
+
+    def parse_section_info(self):
+        info = []
+        info.append("=" * 80)
+        info.append("                          PE文件节表信息")
+        info.append("=" * 80)
+        info.append(
+            f"{'节名':<10} {'虚拟地址(RVA)':<15} {'虚拟大小':<12} {'文件偏移':<12} {'文件大小':<12} {'特征值':<15}")
+        info.append("-" * 80)
+        for section in self.pe.sections:
+            section_name = section.Name.decode("utf-8", errors="replace").strip("\x00")
+            info.append(
+                f"{section_name:<10} 0x{section.VirtualAddress:08X}     {section.Misc_VirtualSize:<12} 0x{section.PointerToRawData:08X}     {section.SizeOfRawData:<12} 0x{section.Characteristics:08X}")
+
+        self.section_text.config(state=tk.NORMAL)
+        self.section_text.delete(1.0, tk.END)
+        self.section_text.insert(tk.END, "\n".join(info) + "\n")
+        self.section_text.config(state=tk.DISABLED)
+
+    def extract_strings(self):
+        info = []
+        info.append("=" * 60)
+        info.append("                PE文件可打印字符串提取（ASCII）")
+        info.append("=" * 60)
+        info.append(f"说明：仅显示长度≥4的可打印字符串\n")
 
         try:
-            headers_info = analyze_headers(self.pe)
+            with open(self.pe_path, "rb") as f:
+                raw_data = f.read()
 
-            info = ["=" * 60, "PE文件基础信息", "=" * 60, ""]
+            current_string = b""
+            strings_found = []
 
-            for header in headers_info:
-                for key, value in header.items():
-                    info.append(f"{key}: {value}")
-                info.append("")
+            for byte in raw_data:
+                if 0x20 <= byte <= 0x7E:
+                    current_string += bytes([byte])
+                else:
+                    if len(current_string) >= 4:
+                        strings_found.append(current_string.decode("ascii", errors="replace"))
+                    current_string = b""
 
-            self.insert_text(self.basic_text, "\n".join(info))
+            if len(current_string) >= 4:
+                strings_found.append(current_string.decode("ascii", errors="replace"))
 
-        except Exception as e:
-            self.insert_text(self.basic_text, f"基础信息解析失败: {str(e)}")
+            max_display = 1000
+            if len(strings_found) > max_display:
+                info.append(f"注：发现 {len(strings_found)} 个字符串，仅显示前 {max_display} 个\n")
+                strings_found = strings_found[:max_display]
 
-    def display_section_info(self):
-        """显示节表信息 - 使用你的模块"""
-        self.clear_text_widget(self.section_text)
-
-        try:
-            sections_result = analyze_sections(self.pe)
-
-            if sections_result["status"] == "success":
-                info = ["=" * 80, "PE文件节表分析", "=" * 80, ""]
-
-                for i, section in enumerate(sections_result["sections"], 1):
-                    info.append(f"节 #{i}: {section['name']}")
-                    info.append(f"  用途: {section['purpose']}")
-                    info.append(f"  内存地址: {section['memory_layout']['virtual_address_hex']}")
-                    info.append(f"  内存大小: {section['memory_layout']['virtual_size_hex']}")
-                    info.append(f"  文件大小: {section['file_layout']['raw_size_hex']}")
-                    info.append(f"  权限: {section['security']['permissions']}")
-
-                    # 显示安全分析
-                    security_notes = section['security']['security_analysis']
-                    if security_notes:
-                        info.append("  安全分析:")
-                        for note in security_notes:
-                            info.append(f"    - {note}")
-
-                    info.append("")
-
-                self.insert_text(self.section_text, "\n".join(info))
+            if strings_found:
+                info.extend(strings_found)
             else:
-                self.insert_text(self.section_text, "节表分析失败")
+                info.append("未提取到可打印字符串")
 
         except Exception as e:
-            self.insert_text(self.section_text, f"节表分析失败: {str(e)}")
+            info.append(f"字符串提取失败: {str(e)}")
 
-    def display_import_info(self):
-        """显示导入表信息 - 使用Eee的模块"""
-        self.clear_text_widget(self.import_text)
+        self.string_text.config(state=tk.NORMAL)
+        self.string_text.delete(1.0, tk.END)
+        self.string_text.insert(tk.END, "\n".join(info) + "\n")
+        self.string_text.config(state=tk.DISABLED)
 
-        try:
-            imports_info = analyze_imports(self.pe)
+    def parse_import_info(self):
+        info = []
+        info.append("=" * 60)
+        info.append("                          PE文件导入表信息")
+        info.append("=" * 60)
 
-            info = ["=" * 60, "PE文件导入表分析", "=" * 60, ""]
+        if hasattr(self.pe, "DIRECTORY_ENTRY_IMPORT"):
+            for imp in self.pe.DIRECTORY_ENTRY_IMPORT:
+                dll_name = imp.dll.decode("utf-8", errors="replace")
+                info.append(f"\n[+] 导入DLL: {dll_name}")
+                info.append(f"    函数列表:")
+                for func in imp.imports:
+                    if func.name:
+                        func_name = func.name.decode("utf-8", errors="replace")
+                    else:
+                        func_name = f"序数_{func.ordinal}"
+                    info.append(f"      - {func_name:<30} 地址: 0x{func.address:08X}")
+        else:
+            info.append("[-] 该PE文件无导入表信息")
 
-            for import_item in imports_info:
-                info.append(f"DLL: {import_item['dll_name']}")
-                info.append(f"函数数量: {import_item['function_count']}")
-                info.append("导入函数:")
+        self.import_text.config(state=tk.NORMAL)
+        self.import_text.delete(1.0, tk.END)
+        self.import_text.insert(tk.END, "\n".join(info) + "\n")
+        self.import_text.config(state=tk.DISABLED)
 
-                for func in import_item['functions']:
-                    info.append(f"  - {func['name']}")
-
-                info.append("")
-
-            self.insert_text(self.import_text, "\n".join(info))
-
-        except Exception as e:
-            self.insert_text(self.import_text, f"导入表分析失败: {str(e)}")
-
-    def display_strings_info(self):
-        """显示字符串信息 - 使用Eee的模块"""
-        self.clear_text_widget(self.strings_text)
-
-        try:
-            strings_info = extract_strings(self.pe_path)
-
-            info = ["=" * 60, "PE文件字符串提取", "=" * 60, ""]
-            info.append(f"共找到 {len(strings_info)} 个字符串\n")
-
-            for string_item in strings_info[:50]:  # 只显示前50个，避免太多
-                info.append(f"偏移: {string_item['offset']}")
-                info.append(f"字符串: {string_item['string'][:100]}...")  # 限制长度
-                info.append("-" * 40)
-
-            if len(strings_info) > 50:
-                info.append(f"\n... 还有 {len(strings_info) - 50} 个字符串未显示")
-
-            self.insert_text(self.strings_text, "\n".join(info))
-
-        except Exception as e:
-            self.insert_text(self.strings_text, f"字符串提取失败: {str(e)}")
-
-    def display_hashes_info(self):
-        """显示哈希值信息 - 使用Eee的模块"""
-        self.clear_text_widget(self.hashes_text)
-
-        try:
-            hashes_info = calculate_hashes(self.pe_path)
-
-            info = ["=" * 60, "PE文件哈希值", "=" * 60, ""]
-
-            for hash_item in hashes_info:
-                for hash_type, hash_value in hash_item.items():
-                    info.append(f"{hash_type}: {hash_value}")
-
-            self.insert_text(self.hashes_text, "\n".join(info))
-
-        except Exception as e:
-            self.insert_text(self.hashes_text, f"哈希计算失败: {str(e)}")
-
-    def clear_text_widget(self, text_widget):
-        """清空文本框"""
-        text_widget.config(state=tk.NORMAL)
-        text_widget.delete(1.0, tk.END)
-
-    def insert_text(self, text_widget, text):
-        """向文本框插入文本"""
-        text_widget.config(state=tk.NORMAL)
-        text_widget.insert(tk.END, text + "\n")
-        text_widget.config(state=tk.DISABLED)
-
-    def clear_result(self):
-        """清空所有结果"""
-        self.clear_text_widget(self.basic_text)
-        self.clear_text_widget(self.section_text)
-        self.clear_text_widget(self.import_text)
-        self.clear_text_widget(self.strings_text)
-        self.clear_text_widget(self.hashes_text)
-
-
-def main():
-    """主程序入口"""
-    root = tk.Tk()
-    app = PEAnalyzerGUI(root)
-    root.mainloop()
-
+    def get_machine_type(self, machine_code):
+        machine_map = {
+            0x0: "未知",
+            0x14C: "x86 (32位)",
+            0x8664: "x64 (64位)",
+            0x162: "MIPS",
+            0x184: "ARM",
+            0x1C0: "ARM64",
+            0x1F0: "PowerPC"
+        }
+        return machine_map.get(machine_code, f"其他架构 (0x{machine_code:04X})")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        import pefile
+    except ImportError:
+        import sys
+
+        print("请先安装依赖库：pip install pefile")
+        sys.exit(1)
+
+    root = tk.Tk()
+    app = PEAnalyzerGUI(root)
+    root.mainloop()
