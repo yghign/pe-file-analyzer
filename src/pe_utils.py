@@ -1,41 +1,63 @@
-def simple_string_extract():
+import hashlib
+import os
 
-    file_path = input("请输入文件路径: ").strip()
 
+def calculate_hashes(file_path):
+    """
+    计算文件的哈希值
+    参数: file_path - 文件路径
+    返回: 哈希值列表
+    """
+    try:
+        with open(file_path, 'rb') as f:
+            data = f.read()
+
+        hashes_info = [{
+            "MD5": hashlib.md5(data).hexdigest(),
+            "SHA1": hashlib.sha1(data).hexdigest(),
+            "SHA256": hashlib.sha256(data).hexdigest()
+        }]
+
+        return hashes_info
+
+    except Exception as e:
+        return [{"error": f"哈希计算失败: {str(e)}"}]
+
+
+def extract_strings(file_path, min_length=4):
+    """
+    从文件中提取可打印字符串
+    参数:
+        file_path - 文件路径
+        min_length - 最小字符串长度
+    返回: 字符串信息列表
+    """
     try:
         with open(file_path, 'rb') as file:
             data = file.read()
 
-        print(f"\n文件: {file_path}")
-        print(f"大小: {len(data)} 字节")
-        print("-" * 30)
-
-        # 提取可打印字符串（长度>=4）
-        current = ""
-        strings = []
+        strings_info = []
+        current_string = ""
 
         for byte in data:
             if 32 <= byte <= 126:  # 可打印ASCII范围
-                current += chr(byte)
+                current_string += chr(byte)
             else:
-                if len(current) >= 4:
-                    strings.append(current)
-                current = ""
+                if len(current_string) >= min_length:
+                    strings_info.append({
+                        "offset": f"0x{data.find(current_string.encode()):08X}",
+                        "string": current_string
+                    })
+                current_string = ""
 
-        # 显示找到的字符串
-        print(f"找到 {len(strings)} 个字符串:\n")
-        for i, s in enumerate(strings[:20], 1):  # 只显示前20个
-            print(f"{i}. {s}")
+        # 处理最后一个字符串
+        if len(current_string) >= min_length:
+            strings_info.append({
+                "offset": f"0x{data.find(current_string.encode()):08X}",
+                "string": current_string
+            })
 
-        if len(strings) > 20:
-            print(f"... 还有 {len(strings) - 20} 个字符串")
+        return strings_info
 
-    except FileNotFoundError:
-        print("文件不存在！")
     except Exception as e:
-        print(f"错误: {e}")
-
-
-# 使用
-if __name__ == "__main__":
-    simple_string_extract()
+        return [{"error": f"字符串提取失败: {str(e)}"}]
