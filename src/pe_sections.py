@@ -7,39 +7,39 @@ from typing import Dict, List, Any, Optional
 def get_section_characteristics(characteristics: int) -> List[str]:
     """获取节特性标志的描述"""
     flags = {
-        0x00000020: "CODE",
-        0x00000040: "INITIALIZED_DATA",
-        0x00000080: "UNINITIALIZED_DATA",
-        0x00000200: "LINK_INFO",
-        0x00000800: "LINK_REMOVE",
-        0x00001000: "LINK_COMDAT",
-        0x00004000: "GPREL",
-        0x00008000: "MEM_PURGEABLE",
-        0x00010000: "MEM_16BIT",
-        0x00020000: "MEM_LOCKED",
-        0x00040000: "MEM_PRELOAD",
-        0x00100000: "ALIGN_1BYTES",
-        0x00200000: "ALIGN_2BYTES",
-        0x00300000: "ALIGN_4BYTES",
-        0x00400000: "ALIGN_8BYTES",
-        0x00500000: "ALIGN_16BYTES",
-        0x00600000: "ALIGN_32BYTES",
-        0x00700000: "ALIGN_64BYTES",
-        0x00800000: "ALIGN_128BYTES",
-        0x00900000: "ALIGN_256BYTES",
-        0x00A00000: "ALIGN_512BYTES",
-        0x00B00000: "ALIGN_1024BYTES",
-        0x00C00000: "ALIGN_2048BYTES",
-        0x00D00000: "ALIGN_4096BYTES",
-        0x00E00000: "ALIGN_8192BYTES",
-        0x01000000: "LINK_NRELOC_OVFL",
-        0x02000000: "MEM_DISCARDABLE",
-        0x04000000: "MEM_NOT_CACHED",
-        0x08000000: "MEM_NOT_PAGED",
-        0x10000000: "MEM_SHARED",
-        0x20000000: "MEM_EXECUTE",
-        0x40000000: "MEM_READ",
-        0x80000000: "MEM_WRITE"
+        0x00000020: "代码节",
+        0x00000040: "已初始化数据节",
+        0x00000080: "未初始化数据节",
+        0x00000200: "链接信息",
+        0x00000800: "链接移除",
+        0x00001000: "链接COMDAT",
+        0x00004000: "GP相对寻址",
+        0x00008000: "内存可清除",
+        0x00010000: "16位内存",
+        0x00020000: "内存锁定",
+        0x00040000: "内存预加载",
+        0x00100000: "1字节对齐",
+        0x00200000: "2字节对齐",
+        0x00300000: "4字节对齐",
+        0x00400000: "8字节对齐",
+        0x00500000: "16字节对齐",
+        0x00600000: "32字节对齐",
+        0x00700000: "64字节对齐",
+        0x00800000: "128字节对齐",
+        0x00900000: "256字节对齐",
+        0x00A00000: "512字节对齐",
+        0x00B00000: "1024字节对齐",
+        0x00C00000: "2048字节对齐",
+        0x00D00000: "4096字节对齐",
+        0x00E00000: "8192字节对齐",
+        0x01000000: "重定位溢出",
+        0x02000000: "内存可丢弃",
+        0x04000000: "内存不缓存",
+        0x08000000: "内存不换页",
+        0x10000000: "内存共享",
+        0x20000000: "内存可执行",
+        0x40000000: "内存可读",
+        0x80000000: "内存可写"
     }
 
     desc = []
@@ -146,7 +146,7 @@ def analyze_section_security(characteristics: int, section_name: str) -> str:
     if (characteristics & 0x20000000 and  # 可执行
             characteristics & 0x80000000 and  # 可写
             (characteristics & 0x00000020 or '.text' in section_name.lower())):  # 代码节
-        security_notes.append("可写代码节 - 极高风险")
+        security_notes.append("可写代码节，可能用于自我修改或Shellcode！")
 
     # 检查可疑节名
     suspicious_names = ['.crypt', '.encrypted', '.packed', '.upx', '.vmp', '.themida']
@@ -203,12 +203,12 @@ def calculate_alignment_info(section, optional_header) -> Dict[str, Any]:
         aligned_raw_size = (raw_size + file_alignment - 1) // file_alignment * file_alignment
 
         return {
-            "section_alignment": section_alignment,
-            "file_alignment": file_alignment,
-            "virtual_size_aligned": aligned_virtual_size,
-            "raw_size_aligned": aligned_raw_size,
-            "virtual_waste": aligned_virtual_size - virtual_size,
-            "raw_waste": aligned_raw_size - raw_size
+            "节对齐": section_alignment,
+            "文件对齐": file_alignment,
+            "对齐后虚拟大小": aligned_virtual_size,
+            "对齐后原始大小": aligned_raw_size,
+            "虚拟空间浪费": aligned_virtual_size - virtual_size,
+            "原始空间浪费": aligned_raw_size - raw_size
         }
     except Exception:
         return {}
@@ -234,7 +234,7 @@ def calculate_section_entropy(section) -> Optional[float]:
             if count == 0:
                 continue
             p = count / data_len
-            entropy -= p * math.log2(p)  # 修复这里，使用math.log2
+            entropy -= p * math.log2(p)
 
         return entropy
     except Exception:
@@ -269,7 +269,7 @@ def analyze_sections(pe) -> Dict[str, Any]:
     sections_info = []
 
     if not hasattr(pe, 'sections') or not pe.sections:
-        return {"status": "error", "message": "此PE文件没有节表或无法解析节表"}
+        return {"状态": "error", "消息": "此PE文件没有节表或无法解析节表"}
 
     for section in pe.sections:
         try:
@@ -281,43 +281,43 @@ def analyze_sections(pe) -> Dict[str, Any]:
             description = get_section_description(section_name)
 
             section_info = {
-                "name": section_name,
-                "purpose": purpose,
-                "description": description,
-                "memory_layout": {
-                    "virtual_address": section.VirtualAddress,
-                    "virtual_address_hex": f"0x{section.VirtualAddress:08X}",
-                    "virtual_size": section.Misc_VirtualSize,
-                    "virtual_size_hex": f"0x{section.Misc_VirtualSize:08X}",
-                    "virtual_end": section.VirtualAddress + section.Misc_VirtualSize,
-                    "virtual_end_hex": f"0x{section.VirtualAddress + section.Misc_VirtualSize:08X}",
-                    "virtual_explanation": "该节在内存中的起始位置（相对地址）"
+                "名称": section_name,
+                "用途": purpose,
+                "描述": description,
+                "内存布局": {
+                    "虚拟地址": section.VirtualAddress,
+                    "虚拟地址16进制": f"0x{section.VirtualAddress:08X}",
+                    "虚拟大小": section.Misc_VirtualSize,
+                    "虚拟大小16进制": f"0x{section.Misc_VirtualSize:08X}",
+                    "虚拟结束地址": section.VirtualAddress + section.Misc_VirtualSize,
+                    "虚拟结束地址16进制": f"0x{section.VirtualAddress + section.Misc_VirtualSize:08X}",
+                    "虚拟地址说明": "该节在内存中的起始位置（相对地址）"
                 },
-                "file_layout": {
-                    "raw_size": section.SizeOfRawData,
-                    "raw_size_hex": f"0x{section.SizeOfRawData:08X}",
-                    "raw_pointer": section.PointerToRawData,
-                    "raw_pointer_hex": f"0x{section.PointerToRawData:08X}",
-                    "raw_end": section.PointerToRawData + section.SizeOfRawData,
-                    "raw_end_hex": f"0x{section.PointerToRawData + section.SizeOfRawData:08X}",
-                    "raw_explanation": "该节数据在文件中的起始位置"
+                "文件布局": {
+                    "原始大小": section.SizeOfRawData,
+                    "原始大小16进制": f"0x{section.SizeOfRawData:08X}",
+                    "原始数据指针": section.PointerToRawData,
+                    "原始数据指针16进制": f"0x{section.PointerToRawData:08X}",
+                    "原始结束位置": section.PointerToRawData + section.SizeOfRawData,
+                    "原始结束位置16进制": f"0x{section.PointerToRawData + section.SizeOfRawData:08X}",
+                    "原始数据说明": "该节数据在文件中的起始位置"
                 },
-                "security": {
-                    "characteristics": section.Characteristics,
-                    "characteristics_hex": f"0x{section.Characteristics:08X}",
-                    "characteristics_desc": characteristics_desc,
-                    "permissions": extract_section_permissions(section.Characteristics),
-                    "security_analysis": analyze_section_security(section.Characteristics, section_name),
-                    "risk_level": assess_section_risk(section.Characteristics, section_name),
-                    "entropy": calculate_section_entropy(section)
+                "安全特性": {
+                    "特性标志": section.Characteristics,
+                    "特性标志16进制": f"0x{section.Characteristics:08X}",
+                    "特性描述": characteristics_desc,
+                    "权限": extract_section_permissions(section.Characteristics),
+                    "安全分析": analyze_section_security(section.Characteristics, section_name),
+                    "风险等级": assess_section_risk(section.Characteristics, section_name),
+                    "熵值": calculate_section_entropy(section)
                 },
-                "flags": {
-                    "is_executable": bool(section.Characteristics & 0x20000000),
-                    "is_writable": bool(section.Characteristics & 0x80000000),
-                    "is_readable": bool(section.Characteristics & 0x40000000),
-                    "is_code": bool(section.Characteristics & 0x00000020),
-                    "is_initialized_data": bool(section.Characteristics & 0x00000040),
-                    "is_uninitialized_data": bool(section.Characteristics & 0x00000080)
+                "标志位": {
+                    "可执行": bool(section.Characteristics & 0x20000000),
+                    "可写": bool(section.Characteristics & 0x80000000),
+                    "可读": bool(section.Characteristics & 0x40000000),
+                    "代码节": bool(section.Characteristics & 0x00000020),
+                    "已初始化数据": bool(section.Characteristics & 0x00000040),
+                    "未初始化数据": bool(section.Characteristics & 0x00000080)
                 }
             }
 
@@ -325,62 +325,62 @@ def analyze_sections(pe) -> Dict[str, Any]:
             if hasattr(pe, 'OPTIONAL_HEADER'):
                 alignment_info = calculate_alignment_info(section, pe.OPTIONAL_HEADER)
                 if alignment_info:
-                    section_info["alignment"] = alignment_info
+                    section_info["对齐信息"] = alignment_info
 
             sections_info.append(section_info)
 
         except Exception as e:
             error_section = {
-                "name": "解析失败",
-                "error": str(e),
-                "purpose": "错误节",
-                "description": "解析此节时出现错误",
-                "memory_layout": {},
-                "file_layout": {},
-                "security": {},
-                "flags": {}
+                "名称": "解析失败",
+                "错误": str(e),
+                "用途": "错误节",
+                "描述": "解析此节时出现错误",
+                "内存布局": {},
+                "文件布局": {},
+                "安全特性": {},
+                "标志位": {}
             }
             sections_info.append(error_section)
 
     return {
-        "status": "success",
-        "sections": sections_info,
-        "metadata": {
-            "total_sections": len(sections_info),
-            "analysis_timestamp": os.times().elapsed if hasattr(os, 'times') else 0
+        "状态": "success",
+        "节信息": sections_info,
+        "元数据": {
+            "总节数": len(sections_info),
+            "分析时间戳": os.times().elapsed if hasattr(os, 'times') else 0
         }
     }
 
 
 def get_section_analysis_summary(sections_data: Dict[str, Any]) -> Dict[str, Any]:
     """生成节表分析的摘要信息"""
-    if sections_data["status"] != "success":
-        return {"error": "无法生成摘要"}
+    if sections_data.get("状态") != "success":
+        return {"错误": "无法生成摘要"}
 
-    sections = sections_data["sections"]
+    sections = sections_data.get("节信息", [])
     total_sections = len(sections)
 
     if total_sections == 0:
-        return {"error": "没有可分析的节"}
+        return {"错误": "没有可分析的节"}
 
-    # 统计各类节的数量
-    code_sections = sum(1 for s in sections if s.get("flags", {}).get("is_code", False))
-    data_sections = sum(1 for s in sections if s.get("flags", {}).get("is_initialized_data", False))
-    uninit_data_sections = sum(1 for s in sections if s.get("flags", {}).get("is_uninitialized_data", False))
+    # 统计各类节的数量 - 使用中文键名
+    code_sections = sum(1 for s in sections if s.get("标志位", {}).get("代码节", False))
+    data_sections = sum(1 for s in sections if s.get("标志位", {}).get("已初始化数据", False))
+    uninit_data_sections = sum(1 for s in sections if s.get("标志位", {}).get("未初始化数据", False))
 
-    # 安全风险统计
-    high_risk = sum(1 for s in sections if s.get("security", {}).get("risk_level") == "high")
-    medium_risk = sum(1 for s in sections if s.get("security", {}).get("risk_level") == "medium")
-    low_risk = sum(1 for s in sections if s.get("security", {}).get("risk_level") == "low")
+    # 安全风险统计 - 使用中文键名
+    high_risk = sum(1 for s in sections if s.get("安全特性", {}).get("风险等级") == "high")
+    medium_risk = sum(1 for s in sections if s.get("安全特性", {}).get("风险等级") == "medium")
+    low_risk = sum(1 for s in sections if s.get("安全特性", {}).get("风险等级") == "low")
 
-    # 权限统计
-    executable_sections = sum(1 for s in sections if s.get("flags", {}).get("is_executable", False))
-    writable_sections = sum(1 for s in sections if s.get("flags", {}).get("is_writable", False))
-    readable_sections = sum(1 for s in sections if s.get("flags", {}).get("is_readable", False))
+    # 权限统计 - 使用中文键名
+    executable_sections = sum(1 for s in sections if s.get("标志位", {}).get("可执行", False))
+    writable_sections = sum(1 for s in sections if s.get("标志位", {}).get("可写", False))
+    readable_sections = sum(1 for s in sections if s.get("标志位", {}).get("可读", False))
 
     # 计算平均熵（用于检测加壳）
-    entropies = [s.get("security", {}).get("entropy", 0) for s in sections if
-                 s.get("security", {}).get("entropy") is not None]
+    entropies = [s.get("安全特性", {}).get("熵值", 0) for s in sections if
+                 s.get("安全特性", {}).get("熵值") is not None]
     avg_entropy = sum(entropies) / len(entropies) if entropies else 0
 
     # 安全评估
@@ -393,19 +393,19 @@ def get_section_analysis_summary(sections_data: Dict[str, Any]) -> Dict[str, Any
         security_assessment = "熵值较高，可能被加壳或压缩"
 
     return {
-        "total_sections": total_sections,
-        "code_sections": code_sections,
-        "data_sections": data_sections,
-        "uninitialized_data_sections": uninit_data_sections,
-        "executable_sections": executable_sections,
-        "writable_sections": writable_sections,
-        "readable_sections": readable_sections,
-        "high_risk_sections": high_risk,
-        "medium_risk_sections": medium_risk,
-        "low_risk_sections": low_risk,
-        "average_entropy": round(avg_entropy, 3),
-        "security_assessment": security_assessment,
-        "risk_percentage": round((high_risk + medium_risk * 0.5) / total_sections * 100, 2) if total_sections > 0 else 0
+        "总节数": total_sections,
+        "代码节数": code_sections,
+        "数据节数": data_sections,
+        "未初始化数据节数": uninit_data_sections,
+        "可执行节数": executable_sections,
+        "可写节数": writable_sections,
+        "可读节数": readable_sections,
+        "高风险节数": high_risk,
+        "中风险节数": medium_risk,
+        "低风险节数": low_risk,
+        "平均熵值": round(avg_entropy, 3),
+        "安全评估": security_assessment,
+        "风险百分比": round((high_risk + medium_risk * 0.5) / total_sections * 100, 2) if total_sections > 0 else 0
     }
 
 
@@ -497,14 +497,14 @@ def _test_module():
         pe = pefile.PE(test_file)
         result = analyze_sections(pe)
         print("模块测试成功！")
-        print(f"找到 {len(result['sections'])} 个节")
+        print(f"找到 {len(result['节信息'])} 个节")
 
-        # 显示前3个节的信息
-        for i, section in enumerate(result['sections'][:3]):
-            print(f"\n--- 节 {i + 1}: {section['name']} ---")
-            print(f"用途: {section['purpose']}")
-            print(f"权限: {section['security']['permissions']}")
-            print(f"风险等级: {section['security']['risk_level']}")
+        # 显示前3个节的信息 - 使用中文键名
+        for i, section in enumerate(result['节信息'][:3]):
+            print(f"\n--- 节 {i + 1}: {section['名称']} ---")
+            print(f"用途: {section['用途']}")
+            print(f"权限: {section['安全特性']['权限']}")
+            print(f"风险等级: {section['安全特性']['风险等级']}")
 
         # 测试新功能
         summary = get_section_analysis_summary(result)

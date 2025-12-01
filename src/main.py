@@ -473,22 +473,22 @@ class PEAnalyzerGUI:
             sections_data = self.analysis_results['sections']
 
             if isinstance(sections_data, dict):
-                if sections_data.get('status') == 'success':
-                    sections = sections_data.get('sections', [])
+                if sections_data.get('状态') == 'success':
+                    sections = sections_data.get('节信息', [])
                     for section in sections:
                         self.sections_tree.insert("", tk.END, values=(
-                            section.get('name', ''),
-                            section.get('memory_layout', {}).get('virtual_address_hex', ''),
-                            section.get('memory_layout', {}).get('virtual_size_hex', ''),
-                            section.get('file_layout', {}).get('raw_pointer_hex', ''),
-                            section.get('file_layout', {}).get('raw_size_hex', ''),
-                            section.get('security', {}).get('permissions', ''),
-                            section.get('security', {}).get('risk_level', '')
+                            section.get('名称', ''),
+                            section.get('内存布局', {}).get('虚拟地址16进制', ''),
+                            section.get('内存布局', {}).get('虚拟大小16进制', ''),
+                            section.get('文件布局', {}).get('原始数据指针16进制', ''),
+                            section.get('文件布局', {}).get('原始大小16进制', ''),
+                            section.get('安全特性', {}).get('权限', ''),
+                            section.get('安全特性', {}).get('风险等级', '')
                         ))
                 else:
                     # 显示错误信息
                     self.sections_tree.insert("", tk.END, values=(
-                        "错误", "", "", "", "", "", sections_data.get('message', '未知错误')
+                        "错误", "", "", "", "", "", sections_data.get('消息', '未知错误')
                     ))
 
     def update_imports_info(self):
@@ -564,15 +564,28 @@ class PEAnalyzerGUI:
             hashes_data = self.analysis_results['hashes']
             if isinstance(hashes_data, dict) and hashes_data.get('status') == 'success':
                 security_checks.append(("文件哈希验证", "通过", "低", "文件完整性验证通过"))
+                # 显示哈希值
+                hashes = hashes_data.get('hashes', {})
+                for algo, info in hashes.items():
+                    security_checks.append(
+                        (f"{algo}哈希", info['value'][:16] + "...", "低", info['description']))  # 修复这里
             else:
                 security_checks.append(("文件哈希验证", "失败", "中", "哈希计算失败"))
 
         # 节表风险分析
         if 'sections' in self.analysis_results:
             sections_data = self.analysis_results['sections']
-            if isinstance(sections_data, dict) and sections_data.get('status') == 'success':
-                sections = sections_data.get('sections', [])
-                high_risk_count = sum(1 for s in sections if s.get('security', {}).get('risk_level') == 'high')
+            if isinstance(sections_data, dict) and sections_data.get('状态') == 'success':
+                sections = sections_data.get('节信息', [])
+                high_risk_count = sum(1 for s in sections if s.get('安全特性', {}).get('风险等级') == 'high')
+
+                # 检查具体的安全警告
+                for section in sections:
+                    security_analysis = section.get('安全特性', {}).get('安全分析', '')
+                    if '代码节可写' in security_analysis:
+                        security_checks.append(
+                            (f"节 {section.get('名称')}", "警告", "高", "代码节可写，可能用于自我修改或Shellcode！"))
+
                 if high_risk_count > 0:
                     security_checks.append(("节表风险分析", "警告", "高", f"发现 {high_risk_count} 个高风险节"))
                 else:
@@ -584,14 +597,14 @@ class PEAnalyzerGUI:
         if 'imports' in self.analysis_results:
             imports_data = self.analysis_results['imports']
             if isinstance(imports_data, dict) and imports_data.get('status') == 'success':
-                imports_list = imports_data.get('imports', [])
-                suspicious_count = 0
-                for item in imports_list:
-                    if isinstance(item, dict) and 'functions' in item:
-                        suspicious_count += sum(1 for func in item['functions'] if func.get('suspicious', False))
+                # 显示安全警告
+                security_warnings = imports_data.get('security_warnings', [])
+                for warning in security_warnings[:5]:  # 显示前5个警告
+                    security_checks.append(("导入函数警告", "警告", "高", warning))
 
-                if suspicious_count > 0:
-                    security_checks.append(("导入函数检测", "警告", "中", f"发现 {suspicious_count} 个可疑函数"))
+                suspicious_imports = imports_data.get('summary', {}).get('suspicious_imports', [])
+                if suspicious_imports:
+                    security_checks.append(("可疑导入函数", "警告", "中", f"发现 {len(suspicious_imports)} 个可疑函数"))
                 else:
                     security_checks.append(("导入函数检测", "通过", "低", "未发现可疑函数"))
             else:
@@ -606,6 +619,7 @@ class PEAnalyzerGUI:
             else:
                 security_checks.append(("字符串分析", "失败", "中", "字符串分析失败"))
 
+        # 移到循环外面
         for check in security_checks:
             self.security_tree.insert("", tk.END, values=check)
 
@@ -616,6 +630,32 @@ class PEAnalyzerGUI:
 
         # 生成综合分析报告
         report = "=== PE文件综合分析报告 ===\n\n"
+
+        # 安全警告汇总
+        warnings = []
+
+        # 检查节表警告
+        if 'sections' in self.analysis_results:
+            sections_data = self.analysis_results['sections']
+            if isinstance(sections_data, dict) and sections_data.get('状态') == 'success':
+                sections = sections_data.get('节信息', [])
+                for section in sections:
+                    security_analysis = section.get('安全特性', {}).get('安全分析', '')
+                    if '代码节可写' in security_analysis:
+                        warnings.append(f"⚠️ {section.get('名称')} 节可写，可能存在安全风险")
+
+        # 检查导入表警告
+        if 'imports' in self.analysis_results:
+            imports_data = self.analysis_results['imports']
+            if isinstance(imports_data, dict) and imports_data.get('status') == 'success':
+                security_warnings = imports_data.get('security_warnings', [])
+                warnings.extend(security_warnings)
+
+        if warnings:
+            report += "【安全警告】\n"
+            for warning in warnings:
+                report += f"  {warning}\n"
+            report += "\n"
 
         # 模块可用性检查
         report += "【模块状态】\n"
@@ -640,14 +680,14 @@ class PEAnalyzerGUI:
         report += "\n【节表分析】\n"
         if 'sections' in self.analysis_results:
             sections_data = self.analysis_results['sections']
-            if isinstance(sections_data, dict) and sections_data.get('status') == 'success':
-                sections = sections_data.get('sections', [])
+            if isinstance(sections_data, dict) and sections_data.get('状态') == 'success':
+                sections = sections_data.get('节信息', [])
                 report += f"  总节数: {len(sections)}\n"
-                high_risk = sum(1 for s in sections if s.get('security', {}).get('risk_level') == 'high')
+                high_risk = sum(1 for s in sections if s.get('安全特性', {}).get('风险等级') == 'high')
                 if high_risk > 0:
                     report += f"  ⚠ 高风险节: {high_risk} 个\n"
             else:
-                report += f"  错误: {sections_data.get('message', '未知错误')}\n"
+                report += f"  错误: {sections_data.get('消息', '未知错误')}\n"
 
         # 导入表信息
         report += "\n【导入表分析】\n"

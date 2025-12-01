@@ -273,6 +273,77 @@ class PEAnalysisUtils:
         return suspicious[:10]  # 返回前10个可疑项
 
     @staticmethod
+    def _is_suspicious_function(dll_name: str, func_name: str) -> Dict[str, Any]:
+        """检查函数是否可疑并返回详细信息"""
+        suspicious_functions = {
+            'kernel32.dll': {
+                'VirtualAlloc': '动态内存分配，可能用于代码注入',
+                'VirtualProtect': '修改内存权限，可能用于绕过DEP',
+                'WriteProcessMemory': '写入其他进程内存，可能用于进程注入',
+                'CreateRemoteThread': '在其他进程创建线程，可能用于远程代码执行',
+                'LoadLibrary': '动态加载DLL',
+                'GetProcAddress': '动态获取函数地址'
+            },
+            'advapi32.dll': {
+                'RegSetValue': '修改注册表',
+                'RegDeleteValue': '删除注册表项',
+                'AdjustTokenPrivileges': '调整令牌权限，可能用于提权'
+            },
+            'ws2_32.dll': {
+                'socket': '创建网络套接字',
+                'bind': '绑定网络端口',
+                'listen': '监听网络连接',
+                'accept': '接受网络连接',
+                'connect': '发起网络连接'
+            },
+            'wininet.dll': {
+                'InternetOpen': '初始化网络连接',
+                'InternetConnect': '连接到网络服务器',
+                'HttpOpenRequest': '创建HTTP请求'
+            },
+            'urlmon.dll': {
+                'URLDownloadToFile': '从URL下载文件'
+            },
+            'shell32.dll': {
+                'ShellExecute': '执行外部程序'
+            }
+        }
+
+        dll_lower = dll_name.lower()
+        for suspicious_dll, functions in suspicious_functions.items():
+            if suspicious_dll in dll_lower and func_name in functions:
+                return {
+                    "suspicious": True,
+                    "risk_level": "high",
+                    "description": functions[func_name]
+                }
+
+        # 网络DLL的一般检测
+        network_dlls = ['ws2_32.dll', 'wininet.dll', 'urlmon.dll']
+        if any(dll in dll_lower for dll in network_dlls):
+            return {
+                "suspicious": True,
+                "risk_level": "medium",
+                "description": "程序可能具有网络功能"
+            }
+
+        return {"suspicious": False, "risk_level": "low", "description": ""}
+
+    @staticmethod
+    def _assess_dll_risk(dll_name: str) -> str:
+        """评估DLL的风险等级"""
+        high_risk_dlls = ['kernel32.dll', 'ntdll.dll', 'advapi32.dll', 'ws2_32.dll']
+        medium_risk_dlls = ['user32.dll', 'gdi32.dll', 'shell32.dll', 'wininet.dll']
+
+        dll_lower = dll_name.lower()
+        if any(hr_dll in dll_lower for hr_dll in high_risk_dlls):
+            return "high"
+        elif any(mr_dll in dll_lower for mr_dll in medium_risk_dlls):
+            return "medium"
+        else:
+            return "low"
+
+    @staticmethod
     def analyze_imports(pe: pefile.PE) -> Dict[str, Any]:
         """
         分析PE文件的导入表
@@ -287,6 +358,7 @@ class PEAnalysisUtils:
             imports_info = []
             total_functions = 0
             suspicious_imports = []
+            security_warnings = []
 
             if hasattr(pe, 'DIRECTORY_ENTRY_IMPORT'):
                 for entry in pe.DIRECTORY_ENTRY_IMPORT:
@@ -299,15 +371,30 @@ class PEAnalysisUtils:
                         else:
                             func_name = f"Ordinal_{func.ordinal}"
 
+                        # 检查可疑函数
+                        suspicious_info = PEAnalysisUtils._is_suspicious_function(dll_name, func_name)
+
                         function_info = {
                             "name": func_name,
                             "ordinal": func.ordinal,
                             "address": f"0x{func.address:08X}" if func.address else "N/A",
-                            "suspicious": PEAnalysisUtils._is_suspicious_function(dll_name, func_name)
+                            "suspicious": suspicious_info["suspicious"],
+                            "risk_level": suspicious_info["risk_level"],
+                            "description": suspicious_info["description"]
                         }
 
-                        if function_info["suspicious"]:
-                            suspicious_imports.append(f"{dll_name}.{func_name}")
+                        if suspicious_info["suspicious"]:
+                            suspicious_imports.append({
+                                "dll": dll_name,
+                                "function": func_name,
+                                "description": suspicious_info["description"],
+                                "risk_level": suspicious_info["risk_level"]
+                            })
+
+                            # 添加到安全警告
+                            if suspicious_info["risk_level"] == "high":
+                                security_warnings.append(
+                                    f"高危函数: {dll_name}.{func_name} - {suspicious_info['description']}")
 
                         dll_functions.append(function_info)
 
@@ -330,43 +417,12 @@ class PEAnalysisUtils:
                     "suspicious_imports_count": len(suspicious_imports),
                     "suspicious_imports": suspicious_imports
                 },
+                "security_warnings": security_warnings,  # 添加安全警告字段
                 "analysis": PEAnalysisUtils._analyze_import_patterns(imports_info)
             }
 
         except Exception as e:
             return {"status": "error", "message": f"导入表解析失败: {str(e)}"}
-
-    @staticmethod
-    def _is_suspicious_function(dll_name: str, func_name: str) -> bool:
-        """检查函数是否可疑"""
-        suspicious_functions = {
-            'kernel32.dll': ['VirtualAlloc', 'VirtualProtect', 'WriteProcessMemory', 'CreateRemoteThread'],
-            'advapi32.dll': ['RegSetValue', 'RegDeleteValue', 'AdjustTokenPrivileges'],
-            'ws2_32.dll': ['socket', 'bind', 'listen', 'accept', 'connect'],
-            'wininet.dll': ['InternetOpen', 'InternetConnect', 'HttpOpenRequest'],
-            'urlmon.dll': ['URLDownloadToFile'],
-            'shell32.dll': ['ShellExecute']
-        }
-
-        dll_lower = dll_name.lower()
-        for suspicious_dll, functions in suspicious_functions.items():
-            if suspicious_dll in dll_lower and func_name in functions:
-                return True
-        return False
-
-    @staticmethod
-    def _assess_dll_risk(dll_name: str) -> str:
-        """评估DLL的风险等级"""
-        high_risk_dlls = ['kernel32.dll', 'ntdll.dll', 'advapi32.dll', 'ws2_32.dll']
-        medium_risk_dlls = ['user32.dll', 'gdi32.dll', 'shell32.dll', 'wininet.dll']
-
-        dll_lower = dll_name.lower()
-        if any(hr_dll in dll_lower for hr_dll in high_risk_dlls):
-            return "high"
-        elif any(mr_dll in dll_lower for mr_dll in medium_risk_dlls):
-            return "medium"
-        else:
-            return "low"
 
     @staticmethod
     def _analyze_import_patterns(imports_info: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -498,6 +554,14 @@ if __name__ == "__main__":
         # 测试字符串提取
         strings = PEAnalysisUtils.extract_strings(test_file, max_results=10)
         print("字符串提取:", strings["status"])
+
+        # 测试导入表分析
+        pe = pefile.PE(test_file)
+        imports = PEAnalysisUtils.analyze_imports(pe)
+        print("导入表分析:", imports["status"])
+
+        if imports["status"] == "success":
+            print("安全警告:", imports.get("security_warnings", []))
 
         # 测试综合分析
         analysis = PEAnalysisUtils.get_comprehensive_analysis(test_file)
